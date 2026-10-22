@@ -61,7 +61,7 @@ Every `UPDATE` sits between a `BEGIN` and a `COMMIT`: those are the transaction 
 
 ## What you (the human) do
 
-Claude writes the code, runs every command, and keeps the ticket files up to date. You start sessions, answer questions, learn the design, and merge pull requests.
+Claude writes the code, runs every command, and keeps the ticket files up to date. You start sessions, answer questions, and merge pull requests. You learn the whole design in the last PR.
 
 "Type in a **normal terminal**" means the Terminal app. "Type **in Claude Code**" means the prompt you get after you run `claude`.
 
@@ -89,60 +89,47 @@ Claude reads [`.scratch/handoff.md`](.scratch/handoff.md) and does the setup:
 - it installs the tools and `/priority`;
 - it adds Context7, which Claude uses to look up library docs;
 - it asks you once how PostgreSQL (the database) should run on this machine;
-- it teaches you git worktrees (a separate folder for each PR's branch);
+- it sets up git worktrees for you (a separate folder for each PR's branch);
 - it sets up the folder and branch for PR 1.
 
 It asks you to step in only for things only you can do, such as a browser login.
 
-### 2. Every work session: one ticket
+### 2. Every PR: six steps
 
-A **ticket** is one small job. Each one gets its own Claude session.
+You decided this on 2026-10-22. Every PR follows the same six steps:
 
-0. In a **normal terminal**, go to the folder Claude set up for this PR and start Claude:
+```
+1 folder ──► 2 grilling ──► 3 to-spec ──► 4 to-tickets ──► 5 implement-spec ──► 6 merge
+             └──────── one conversation: no /clear ───────┘
+```
+
+1. **A folder for the PR.** In Claude Code, say `set up the folder for PR <number>`. Claude makes a git worktree (a separate folder with the PR's own branch). Then, in a **normal terminal**:
    ```
    cd <the folder Claude told you>
    claude
    ```
    If Claude says you are on `main`, ask it to switch to the PR's branch first. Work never goes straight onto `main`.
-1. **Ticket 01 comes first, and you do it yourself.** Type: `help me do ticket 01`. Claude gives you a step-by-step guide (a "wizard") for creating your Logfire account, and you follow it.
-2. **Tickets 02, 03 and 04 are built by Claude.** For each one, type the command that starts it. Ticket 02's is:
-   ```
-   /mattpocock-skills:implement .scratch/pr-1-service-skeleton/issues/02-submit-and-look-up-a-run.md
-   ```
-   At the end of each ticket, Claude tells you the exact command for the next one.
-3. Answer Claude's questions. Each one comes with a recommendation, and replying `yes` accepts it.
-4. Claude builds the ticket **test-first** (it writes an automatic check before the code) and explains what it did as it goes. Then tell Claude: `mark this ticket done`.
-5. Type `/clear`. It wipes Claude's short-term memory, so the next ticket starts fresh.
+2. **Grilling.** Type `/mattpocock-skills:grill-with-docs`. Claude asks only the decisions this PR needs, one at a time, each with a recommendation. Replying `yes` accepts it.
+3. **The plan.** When Claude says the interview is done, type `/mattpocock-skills:to-spec`.
+4. **The tickets.** Then type `/mattpocock-skills:to-tickets`. It shows you a ticket list and asks if it looks right before it saves anything. **Don't type `/clear` during steps 2 to 4,** because they need the same conversation.
+5. **The build.** Type `/mattpocock-skills:implement-spec .scratch/pr-<N>-<slug>/spec.md`, using the spec path that `to-spec` printed. It has the same name as the branch, for example `.scratch/pr-1-service-skeleton/spec.md`. Claude builds every ticket **test-first** (it writes an automatic check before the code), reviews its own work, fixes what the review finds, and opens a **pull request** (PR) on GitHub. If a step needs you, such as a sign-up, Claude gives you a step-by-step guide (a "wizard").
+6. **Merge.** Open the PR link, click **Squash and merge** (the only option this repo allows), then **Confirm squash and merge**. Or tell Claude `merge it`. In the last PR, the learning in section 3 comes before this step.
 
-```
-claude ──► start the ticket ──► Claude builds + explains ──► "mark this ticket done" ──► /clear
-   ▲                                                                                       │
-   └───────────────────────────────── next ticket ◄────────────────────────────────────────┘
-```
+### 3. The last PR: you learn everything
 
-### 3. When all of a PR's tickets are done
-
-1. **The learning check.** Claude teaches, then quizzes you on every item in the PR spec's "Must be able to explain" list, and keeps going until you can explain each one back. This is the "Definition of done" in `SPEC.md`: a PR isn't done until you understand it.
-2. Claude opens a **pull request** (PR) on GitHub and gives you the link.
-3. Open the link and read the summary. Click **Squash and merge**, which is the only option this repo allows, then **Confirm squash and merge**. Or just tell Claude `merge it`, and it does the same.
-
-### 4. Planning the next PR
-
-1. Tell Claude: `let's plan PR 2`. Claude interviews you one question at a time (this is called "grilling").
-2. When Claude says the interview is done, type `/mattpocock-skills:to-spec`. It writes the plan.
-3. When that finishes, type `/mattpocock-skills:to-tickets`. It shows you a ticket list and asks if it looks right before it saves anything.
-4. **Don't type `/clear` during steps 1 to 3.** The three steps need the same conversation. After them, go back to section 2.
+Until the last PR, nobody quizzes you. Each PR's spec still collects a "Must be able to explain" list. In the last PR (PR 4), Claude teaches you every item from every PR's list, plus the by-eye checks that earlier PRs left for later (watching `/docs` and the Logfire traces). It uses the finished README, the real code and the real traces. Then Claude quizzes you, re-explains anything shaky, and quizzes again. The last PR merges only when you can explain each item back.
 
 ### Commands you type in Claude Code
 
 | Command | When |
 |---|---|
-| `/mattpocock-skills:implement <ticket file>` | building one ticket |
-| `/mattpocock-skills:to-spec` | after the planning interview: writes the plan |
-| `/mattpocock-skills:to-tickets` | right after `to-spec`: splits the plan into tickets |
+| `/mattpocock-skills:grill-with-docs` | step 2: the planning interview |
+| `/mattpocock-skills:to-spec` | step 3: writes the plan |
+| `/mattpocock-skills:to-tickets` | step 4: splits the plan into tickets |
+| `/mattpocock-skills:implement-spec <spec file>` | step 5: builds every ticket and opens the PR |
 | `/mattpocock-skills:ask-matt` | "which of these should I use now?" |
 | `/priority` | lost? It re-explains Claude's last answer as ranked points. `/priority 3` covers the last three answers. |
-| `/clear` | between tickets (never during planning) |
+| `/clear` | between PRs (never during steps 2 to 4) |
 | `! <command>` | runs a terminal command inside Claude Code when Claude asks you to, for example `! gh auth login` |
 
 ### Rules worth knowing
@@ -161,7 +148,7 @@ claude ──► start the ticket ──► Claude builds + explains ──► "
 | `compose.yaml`, `docker/` | how Docker runs PostgreSQL |
 | `curl-examples.sh` | sample requests for every endpoint |
 | `scripts/setup-logfire.sh` | the wizard that creates your Logfire account, project and write token |
-| `SPEC.md` | the assignment brief and the project's Definition of done |
+| `SPEC.md` | the assignment brief and the project-level Definition of done. Its per-PR part was replaced on 2026-10-22: see "Definition of done" in `CLAUDE.md` |
 | `CLAUDE.md` | how Claude works with you (Claude reads it automatically) |
 | `GLOSSARY.md` | the project's words: Run, Architecture, Plan, … |
 | `.scratch/<pr>/spec.md` | one PR's plan and decisions |
@@ -241,4 +228,4 @@ The choices made so far, newest last, each with its reasoning. The open decision
 - **Database queries are recorded at the asyncpg level.** Logfire's SQLAlchemy hook comes from OpenTelemetry, and its newest version (0.66b1) only supports SQLAlchemy below 2.1, so it would record nothing here. Recording one layer lower, at asyncpg, catches the same queries. This was checked by capturing a Run's spans locally.
 - **Rejected for now:** a separate trace per Run, with its trace ID stored on the Run. That would keep the request's trace and the Run's trace apart, and it would need a new column and manual linking. One trace per Run is simpler and enough for PR 1.
 
-**Checked while building: does the `POST` span last as long as the Run?** No. With Logfire 5.2, the `POST /research/query` span **ends when the 202 response is sent**, after about 5 ms. The background work appears as a child span, `BackgroundTask start_run`, which lasts the whole Run (about 6 seconds). So a child span outlasts its parent. That's allowed: a parent span only says where the work came from, not that it waits for its children. This was measured from a locally captured trace, and it gets confirmed by eye in Logfire as part of ticket 04.
+**Checked while building: does the `POST` span last as long as the Run?** No. With Logfire 5.2, the `POST /research/query` span **ends when the 202 response is sent**, after about 5 ms. The background work appears as a child span, `BackgroundTask start_run`, which lasts the whole Run (about 6 seconds). So a child span outlasts its parent. That's allowed: a parent span only says where the work came from, not that it waits for its children. This was measured from a locally captured trace. On 2026-10-22 the first Run's trace arrived in Logfire, and the developer saw a span of 821 µs. The full by-eye check is part of the last PR's learning.

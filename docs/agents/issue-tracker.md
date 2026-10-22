@@ -4,11 +4,20 @@ Issues and specs for this repo live as markdown files in `.scratch/`.
 
 ## Conventions
 
-- One feature per directory: `.scratch/<feature-slug>/`
+- One feature per directory: `.scratch/<feature-slug>/`. The slug is the PR's branch name, `pr-N-<slug>`, for example `pr-1-service-skeleton`, so `/mattpocock-skills:code-review` finds the spec from the branch.
 - The spec is `.scratch/<feature-slug>/spec.md`
 - Implementation issues are one file per ticket at `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01`, never a single combined tickets file
 - Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading
+
+## When a skill says "close" or "resolve" a ticket
+
+Work closes through a GitHub PR: `/mattpocock-skills:implement-spec` opens a draft PR and marks it ready at the end (see "The flow for every PR" in `CLAUDE.md`). Merging on GitHub can't edit these files, so close each ticket in the PR branch before the PR is marked ready:
+
+- set `**Status:** done`;
+- tick each criterion that was met;
+- leave a criterion marked *(deferred to the last PR)* unticked;
+- append a dated line under `## Comments`.
 
 ## When a skill says "publish to the issue tracker"
 

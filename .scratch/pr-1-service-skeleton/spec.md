@@ -42,7 +42,7 @@ Every Run is stored in PostgreSQL, and each Run's work appears as one trace in L
 23. As the developer, I want a Postman collection or curl script for both endpoints, including a sample end-to-end Run, so that the spec's deliverable grows PR by PR.
 24. As the developer, I want a guided wizard for creating my Logfire account, project and token, so that the one step only I can do is quick and can't go wrong.
 25. As the developer, I want fast automated tests that skip the placeholder's waiting, so that the test suite runs in seconds.
-26. As the developer, I want to be taught, and then quizzed on, every item in the "Must be able to explain" list before this PR counts as done, so that I can explain the flow and the traces in an interview.
+26. As the developer, I want to be taught, and then quizzed on, every item in the "Must be able to explain" list before this PR counts as done, so that I can explain the flow and the traces in an interview. *(Changed on 2026-10-22: this moved to the last PR. See "Definition of done" in `CLAUDE.md`.)*
 
 ## Implementation Decisions
 
@@ -86,7 +86,7 @@ Every Run is stored in PostgreSQL, and each Run's work appears as one trace in L
   - an unknown run ID gets 404.
 - **Startup sweep, through the same seam.** Seed an unfinished Run directly in the test database, start the app, then check that the status endpoint reports `failed` with "interrupted by restart".
 - **Second seam: the work behind `start_run`.** One test swaps in work that deliberately raises an error, then checks through the HTTP seam that the Run ends `failed` with that message.
-- Traces are not tested in code. The developer checks them by eye in Logfire, as part of the definition of done.
+- Traces are not tested in code. The developer checks them by eye in Logfire, in the last PR (deferred on 2026-10-22: see "Definition of done" in `CLAUDE.md`).
 - Prior art: none, since this is a greenfield repo. Tests are written first, using the `tdd` red-green loop.
 
 ## Out of Scope
@@ -111,11 +111,11 @@ Every Run is stored in PostgreSQL, and each Run's work appears as one trace in L
 
 Each PR updates the README decision log and the Postman collection.
 
-**Working agreement.** The developer is a complete beginner. Every step is explained from zero before it happens, following the "Working with the developer" section of `CLAUDE.md`. The rules on what counts as done are in `CLAUDE.md` and the "Definition of done" section of `SPEC.md`.
+**Working agreement.** The developer is a complete beginner. Every decision is explained from zero before it is asked, following "Working with the developer" in `CLAUDE.md`. What counts as done is in "Definition of done" in `CLAUDE.md`. On 2026-10-22 that replaced the per-PR part of the one in `SPEC.md`.
 
 ### Must be able to explain
 
-Tick each item only after the developer has been taught it, quizzed on it, and has explained it back correctly.
+*Deferred to the last PR (the developer decided this on 2026-10-22).* These items are taught and quizzed in PR 4, together with every later PR's list. Tick each item only after the developer has been taught it, quizzed on it, and has explained it back correctly.
 
 - [ ] **Run trace shape:**
   - what a span is and what a trace is;
