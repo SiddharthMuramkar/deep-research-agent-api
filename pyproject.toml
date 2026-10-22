@@ -1,0 +1,28 @@
+[project]
+name = "deep-research-agent-api"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "alembic>=1.20.1",
+    "asyncpg>=0.32.0",
+    "fastapi>=0.159.1",
+    "logfire[asyncpg,fastapi]>=5.2.0",
+    "pydantic-settings>=2.16.1",
+    "sqlalchemy[asyncio]>=2.1.6",
+    "uvicorn>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.16.0",
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+# .claude/ holds Claude Code's own skills and hooks, not service code.
+extend-exclude = [".claude"]

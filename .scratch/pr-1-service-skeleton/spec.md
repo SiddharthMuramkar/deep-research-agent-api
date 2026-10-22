@@ -42,7 +42,7 @@ Every Run is stored in PostgreSQL, and each Run's work appears as one trace in L
 23. As the developer, I want a Postman collection or curl script for both endpoints, including a sample end-to-end Run, so that the spec's deliverable grows PR by PR.
 24. As the developer, I want a guided wizard for creating my Logfire account, project and token, so that the one step only I can do is quick and can't go wrong.
 25. As the developer, I want fast automated tests that skip the placeholder's waiting, so that the test suite runs in seconds.
-26. As the developer, I want to be taught, and then quizzed on, every item in the "Must be able to explain" list before this PR counts as done, so that I can explain the flow and the traces in an interview.
+26. As the developer, I want to be taught, and then quizzed on, every item in the "Must be able to explain" list before this PR counts as done, so that I can explain the flow and the traces in an interview. *(Changed on 2026-10-22: this moved to the last PR. See "Definition of done" in `CLAUDE.md`.)*
 
 ## Implementation Decisions
 
@@ -62,6 +62,7 @@ Every Run is stored in PostgreSQL, and each Run's work appears as one trace in L
   - One manual span, `research run`, wraps the background work and carries the run ID.
   - Because `BackgroundTasks` runs inside the request's handling, a Run's spans nest under its `POST /research/query` trace, and each status poll is its own trace.
   - Confirm while building that the `POST` span lasts as long as the Run. A separate trace per Run was rejected for now.
+  - *Checked while building (2026-10-22):* it does not. The `POST` span ends when the 202 is sent, after about 5 ms. Logfire adds a child span, `BackgroundTask start_run`, which lasts the whole Run. The README decision log records this.
 - **Configuration.** pydantic-settings reads the settings from the environment or `.env`. `DATABASE_URL` is required. `LOGFIRE_TOKEN` is optional; without it, traces aren't sent. The OpenRouter and Tavily keys aren't needed until PR 2. A committed `.env.example` lists the variables.
 - **Toolset.**
   - Python 3.14 (ready-made builds of the database driver and Pydantic were confirmed), managed with uv and its lockfile.
@@ -85,7 +86,7 @@ Every Run is stored in PostgreSQL, and each Run's work appears as one trace in L
   - an unknown run ID gets 404.
 - **Startup sweep, through the same seam.** Seed an unfinished Run directly in the test database, start the app, then check that the status endpoint reports `failed` with "interrupted by restart".
 - **Second seam: the work behind `start_run`.** One test swaps in work that deliberately raises an error, then checks through the HTTP seam that the Run ends `failed` with that message.
-- Traces are not tested in code. The developer checks them by eye in Logfire, as part of the definition of done.
+- Traces are not tested in code. The developer checks them by eye in Logfire, in the last PR (deferred on 2026-10-22: see "Definition of done" in `CLAUDE.md`).
 - Prior art: none, since this is a greenfield repo. Tests are written first, using the `tdd` red-green loop.
 
 ## Out of Scope
@@ -110,27 +111,31 @@ Every Run is stored in PostgreSQL, and each Run's work appears as one trace in L
 
 Each PR updates the README decision log and the Postman collection.
 
-**Working agreement.** The developer is a complete beginner. Every step is explained from zero before it happens, following the "Working with the developer" section of `CLAUDE.md`. The rules on what counts as done are in `CLAUDE.md` and the "Definition of done" section of `SPEC.md`.
+**Working agreement.** The developer is a complete beginner. Every decision is explained from zero before it is asked, following "Working with the developer" in `CLAUDE.md`. What counts as done is in "Definition of done" in `CLAUDE.md`. On 2026-10-22 that replaced the per-PR part of the one in `SPEC.md`.
 
 ### Must be able to explain
 
-Tick each item only after the developer has been taught it, quizzed on it, and has explained it back correctly.
+*Deferred to the last PR (the developer decided this on 2026-10-22).* These items are taught and quizzed in PR 4, together with every later PR's list. Tick each item only after the developer has been taught it, quizzed on it, and has explained it back correctly.
 
 - [ ] **Run trace shape:**
   - what a span is and what a trace is;
   - why a Run's trace hangs off its `POST /research/query` request (`BackgroundTasks` runs inside that request's handling);
   - what the single manual `research run` span is for;
   - why each status poll is its own small trace;
-  - why the `POST` span appears to last as long as the whole Run, even though the caller got its response instantly;
-  - what the rejected alternative, a separate trace per Run with its trace ID stored on the Run, would have changed.
+  - why the `POST` span ends after a few milliseconds while its child `BackgroundTask start_run` span lasts the whole Run (corrected on 2026-10-22: the spec first expected the `POST` span itself to last as long as the Run);
+  - what the rejected alternative, a separate trace per Run with its trace ID stored on the Run, would have changed;
+  - *(added while building)* why database queries are recorded at the asyncpg level (OpenTelemetry's SQLAlchemy hook doesn't support SQLAlchemy 2.1), and why each `UPDATE` sits between `BEGIN` and `COMMIT`;
+  - *(added while building)* how a failed Run shows in the trace: its `research run` span is marked as an error;
+  - *(added while building)* why the settings are read when the app is imported: Logfire must be configured before the app is instrumented.
 
   ```
-  POST /research/query                ← automatic (FastAPI)
+  POST /research/query                ← automatic (FastAPI), ends when the 202 is sent
   ├─ INSERT INTO runs                 ← automatic (database)
-  └─ research run  run_id=…           ← the one manual span
-     ├─ UPDATE runs SET status='planning'
-     ├─ (PR 2: agent run → LLM calls → web_search tool calls)
-     └─ UPDATE runs SET status='done'
+  └─ BackgroundTask start_run         ← automatic (Logfire), lasts the whole Run
+     └─ research run  run_id=…        ← the one manual span
+        ├─ UPDATE runs SET status='planning'
+        ├─ (PR 2: agent run → LLM calls → web_search tool calls)
+        └─ UPDATE runs SET status='done'
 
   GET /research/{id}/status           ← each poll is its own tiny trace
   ```
@@ -140,17 +145,21 @@ Tick each item only after the developer has been taught it, quizzed on it, and h
   - the three status-code families: 2xx success, 4xx the caller's mistake, 5xx the server's fault;
   - what 200, 202, 404, 422 and 500 each mean, and which endpoint returns which, and why;
   - why the submit endpoint answers 202 instead of 200;
-  - how a Pydantic model turns a bad request body into an automatic 422.
+  - how a Pydantic model turns a bad request body into an automatic 422;
+  - *(added while building)* why the query is trimmed of spaces before the 1-to-2000-character check.
 - [ ] **The `runs` table and migrations:**
   - what a database, a table, a row and a column are, and what "nullable" means;
   - what each of the six columns holds, and why `error` is nullable;
   - what SQLAlchemy does (tables as Python classes) and what Alembic does (numbered migration scripts that build and change tables, like git commits for the table layout);
-  - why PR 1 creates only one table, and how PR 2 adds the rest with a new migration.
+  - why PR 1 creates only one table, and how PR 2 adds the rest with a new migration;
+  - *(added while building)* why `status` is text with a CHECK constraint instead of a PostgreSQL enum type;
+  - *(added while building)* what a container is, and why PostgreSQL runs in Docker Desktop (not Podman) on this Mac.
 - [ ] **The Run lifecycle, end to end:**
   - the five statuses and the allowed moves between them (the state machine);
   - what the placeholder does and why it exists (a conveyor belt tested with empty boxes);
   - how an error ends a Run as `failed` with its message recorded, and how the startup sweep handles Runs cut off by a restart;
-  - where `start_run(run_id)` sits, and how PR 2 swaps a real Architecture in without touching the endpoints;
+  - where `start_run(run_id, query)` sits, and how PR 2 swaps a real Architecture in (by pointing `research` at it) without touching the endpoints;
+  - *(added while building)* why the statuses can only move forward: `start_run` is the only code that changes them;
   - the full path of one Run: submit → 202 + run ID → background work → status updates → poll → done, and where each step appears in the trace.
 - [ ] **Test seams:**
   - what a test and a seam are (the vending machine: test from the slot and buttons, not by poking the motors);

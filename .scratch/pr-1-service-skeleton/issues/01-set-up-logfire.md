@@ -4,8 +4,12 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-human
+**Status:** done
 
-- [ ] A Logfire account and a project for this service exist.
-- [ ] A write token is saved as `LOGFIRE_TOKEN` in `.env`, and git does not track `.env`.
-- [ ] The wizard confirmed that the token is in place, and noted Logfire's current free-plan limits.
+- [x] A Logfire account and a project for this service exist.
+- [x] A write token is saved as `LOGFIRE_TOKEN` in `.env`, and git does not track `.env`.
+- [x] The wizard confirmed that the token is in place, and noted Logfire's current free-plan limits.
+
+## Comments
+
+- 2026-10-22: The developer ran `scripts/setup-logfire.sh` and marked this ticket done. Claude checked that `.env` holds a 55-character EU-region token and that git ignores `.env`. The first Run's trace then arrived in Logfire.
