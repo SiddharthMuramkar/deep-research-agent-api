@@ -123,7 +123,10 @@ Tick each item only after the developer has been taught it, quizzed on it, and h
   - what the single manual `research run` span is for;
   - why each status poll is its own small trace;
   - why the `POST` span ends after a few milliseconds while its child `BackgroundTask start_run` span lasts the whole Run (corrected on 2026-10-22: the spec first expected the `POST` span itself to last as long as the Run);
-  - what the rejected alternative, a separate trace per Run with its trace ID stored on the Run, would have changed.
+  - what the rejected alternative, a separate trace per Run with its trace ID stored on the Run, would have changed;
+  - *(added while building)* why database queries are recorded at the asyncpg level (OpenTelemetry's SQLAlchemy hook doesn't support SQLAlchemy 2.1), and why each `UPDATE` sits between `BEGIN` and `COMMIT`;
+  - *(added while building)* how a failed Run shows in the trace: its `research run` span is marked as an error;
+  - *(added while building)* why the settings are read when the app is imported: Logfire must be configured before the app is instrumented.
 
   ```
   POST /research/query                ← automatic (FastAPI), ends when the 202 is sent
@@ -142,17 +145,21 @@ Tick each item only after the developer has been taught it, quizzed on it, and h
   - the three status-code families: 2xx success, 4xx the caller's mistake, 5xx the server's fault;
   - what 200, 202, 404, 422 and 500 each mean, and which endpoint returns which, and why;
   - why the submit endpoint answers 202 instead of 200;
-  - how a Pydantic model turns a bad request body into an automatic 422.
+  - how a Pydantic model turns a bad request body into an automatic 422;
+  - *(added while building)* why the query is trimmed of spaces before the 1-to-2000-character check.
 - [ ] **The `runs` table and migrations:**
   - what a database, a table, a row and a column are, and what "nullable" means;
   - what each of the six columns holds, and why `error` is nullable;
   - what SQLAlchemy does (tables as Python classes) and what Alembic does (numbered migration scripts that build and change tables, like git commits for the table layout);
-  - why PR 1 creates only one table, and how PR 2 adds the rest with a new migration.
+  - why PR 1 creates only one table, and how PR 2 adds the rest with a new migration;
+  - *(added while building)* why `status` is text with a CHECK constraint instead of a PostgreSQL enum type;
+  - *(added while building)* what a container is, and why PostgreSQL runs in Docker Desktop (not Podman) on this Mac.
 - [ ] **The Run lifecycle, end to end:**
   - the five statuses and the allowed moves between them (the state machine);
   - what the placeholder does and why it exists (a conveyor belt tested with empty boxes);
   - how an error ends a Run as `failed` with its message recorded, and how the startup sweep handles Runs cut off by a restart;
-  - where `start_run(run_id)` sits, and how PR 2 swaps a real Architecture in without touching the endpoints;
+  - where `start_run(run_id, query)` sits, and how PR 2 swaps a real Architecture in (by pointing `research` at it) without touching the endpoints;
+  - *(added while building)* why the statuses can only move forward: `start_run` is the only code that changes them;
   - the full path of one Run: submit → 202 + run ID → background work → status updates → poll → done, and where each step appears in the trace.
 - [ ] **Test seams:**
   - what a test and a seam are (the vending machine: test from the slot and buttons, not by poking the motors);

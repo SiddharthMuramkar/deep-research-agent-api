@@ -16,8 +16,8 @@ from tests.database import run_sql
 
 
 def test_a_run_whose_work_raises_ends_failed_with_the_error(client, monkeypatch):
-    async def broken_research(report, step_seconds):
-        await report(RunStatus.planning)
+    async def broken_research(query, update_status):
+        await update_status(RunStatus.planning)
         raise RuntimeError("the search engine is down")
 
     monkeypatch.setattr(runs, "research", broken_research)

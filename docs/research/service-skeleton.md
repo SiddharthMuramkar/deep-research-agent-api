@@ -44,3 +44,8 @@ Scripts in `/docker-entrypoint-initdb.d/` run only when the data volume is first
 - The write token records its region (US or EU), so no base URL is needed. *(logfire docs, data regions)*
 - **OpenTelemetry's SQLAlchemy instrumentation (0.66b1, the newest) only supports `sqlalchemy >= 1.0.0, < 2.1.0`.** With SQLAlchemy 2.1, `logfire.instrument_sqlalchemy()` prints a warning and records nothing. `logfire.instrument_asyncpg()` (the `logfire[asyncpg]` extra) records the same queries at the driver level, including the prepared statements SQLAlchemy uses. *(PyPI metadata; checked by capturing spans locally on 2026-10-22)*
 - `instrument_fastapi` ends the request span when the response is sent. Background tasks appear as a child span named `BackgroundTask <function>` that outlasts its parent, in the same trace. *(captured locally)*
+- An exception that escapes a `logfire.span(...)` block marks that span as an error, and the exception is raised again. `start_run` therefore catches errors *outside* its `research run` span, so a failed Run's span shows red. *(captured locally)*
+
+## One engine for the whole app
+
+`app/database.py` creates the async engine once, when the app is imported, and `lifespan` disposes of it at shut-down. After `dispose()`, SQLAlchemy starts a fresh connection pool on the next use. So the tests can start and stop the app many times, each time on a new event loop, with the same engine. This was checked: the full suite passes with warnings turned into errors.

@@ -11,12 +11,16 @@ response=$(curl -s -X POST "$BASE_URL/research/query" \
   -H "Content-Type: application/json" \
   -d '{"query": "What is a tracer bullet in software development?"}')
 echo "$response"
-run_id=$(echo "$response" | sed -E 's/.*"run_id":"([^"]+)".*/\1/')
+run_id=$(echo "$response" | sed -nE 's/.*"run_id":"([^"]+)".*/\1/p')
+if [[ -z "$run_id" ]]; then
+  echo "No run ID in that response, so stopping here." >&2
+  exit 1
+fi
 
 echo
 echo "2. Poll its status until the Run finishes (about 6 seconds):"
 previous=""
-while true; do
+for _ in $(seq 1 60); do  # give up after about 30 seconds
   status_body=$(curl -s "$BASE_URL/research/$run_id/status")
   status=$(echo "$status_body" | sed -E 's/.*"status":"([^"]+)".*/\1/')
   if [[ "$status" != "$previous" ]]; then
@@ -29,6 +33,10 @@ while true; do
   sleep 0.5
 done
 echo "   Final: $status_body"
+if [[ "$status" != "done" && "$status" != "failed" ]]; then
+  echo "The Run didn't finish within 30 seconds." >&2
+  exit 1
+fi
 
 echo
 echo "3. Look up a run ID that doesn't exist (expect 404):"

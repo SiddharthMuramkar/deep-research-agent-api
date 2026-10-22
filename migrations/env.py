@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.config import Settings
+from app.config import settings
 from app.tables import Base
 
 # this is the Alembic Config object, which provides
@@ -23,7 +23,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 # The same DATABASE_URL the app uses (environment variable or .env).
-database_url = Settings().database_url
+database_url = settings.database_url
 
 
 def run_migrations_offline() -> None:

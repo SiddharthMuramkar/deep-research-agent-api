@@ -50,7 +50,7 @@ GET /research/{run_id}/status     ~4 ms   ← each poll is its own small trace
 └─ SELECT … FROM runs …
 ```
 
-Every `UPDATE` sits between a `BEGIN` and a `COMMIT`: those are the transaction around each change. To find one Run, search for its `run_id`.
+Every `UPDATE` sits between a `BEGIN` and a `COMMIT`: those are the transaction around each change. If a Run fails, its `research run` span is marked as an error, and the `UPDATE` that records `failed` comes right after it. To find one Run, search for its `run_id`.
 
 ### Tests and checks
 
@@ -155,7 +155,7 @@ claude ──► start the ticket ──► Claude builds + explains ──► "
 
 | Path | What it is |
 |---|---|
-| `app/` | the service: `main.py` (start-up and endpoints), `runs.py` (a Run's background work), `schemas.py` (API request and response shapes), `tables.py` (database tables), `config.py` (settings) |
+| `app/` | the service: `main.py` (start-up and endpoints), `runs.py` (a Run's background work), `database.py` (the database connection), `schemas.py` (API request and response shapes), `tables.py` (database tables), `config.py` (settings) |
 | `migrations/` | Alembic: `versions/` holds one numbered script per change to the tables |
 | `tests/` | the automated tests |
 | `compose.yaml`, `docker/` | how Docker runs PostgreSQL |
@@ -207,7 +207,7 @@ The choices made so far, newest last, each with its reasoning. The open decision
 | `status` | text, limited to `queued`, `planning`, `running`, `done` or `failed` | no | where the Run is in its lifecycle |
 | `error` | text | **yes** | the error message, only when the Run failed |
 | `created_at` | timestamp with time zone | no | set by the database when the row is added |
-| `updated_at` | timestamp with time zone | no | set by the database, and changed on every update |
+| `updated_at` | timestamp with time zone | no | set by the database when the row is added; every update the app makes sets it to the database's current time, `now()` |
 
 **Why:**
 - **One table for now.** PR 1 only needs to store the Run itself. The tables for Plans, Steps, Sources and Reports come in PR 2, through a new migration.
@@ -219,13 +219,14 @@ The choices made so far, newest last, each with its reasoning. The open decision
 
 **Decision:**
 - A Run's work runs with FastAPI `BackgroundTasks`, inside the same server process, after the 202 response has gone out.
-- It starts through one swap point, `start_run(run_id)` in `app/runs.py`, and finishes `done` or `failed`. Any error is caught and stored on the Run as `"<ErrorType>: <message>"`.
+- It starts through one swap point, `start_run(run_id, query)` in `app/runs.py`. That function runs the Run's work, then records `done`, or `failed` if any error was raised, with the error stored on the Run as `"<ErrorType>: <message>"`.
+- **The statuses only move forward** (`queued` → `planning` → `running` → `done`), because `start_run` is the only code that changes them, and it does so in that order. Any unfinished status can become `failed`: through an error, or through the start-up sweep.
 - On start-up, the service marks every Run still `queued`, `planning` or `running` as `failed`, with the error "interrupted by restart".
 
 **Why:**
 - `BackgroundTasks` is built into FastAPI. It needs no extra program, queue or database, so there are fewer moving parts to run and explain.
 - The cost: the work lives inside the server process, so a restart or crash stops it. The start-up sweep makes that visible instead of leaving Runs stuck forever. A caller who sees "interrupted by restart" can submit the query again.
-- **One swap point:** PR 1 puts a placeholder behind `start_run`. It waits about 2 seconds, then reports `planning`; about 2 seconds later `running`; and about 2 seconds later the Run is `done`. PR 2 swaps in a real Architecture at the same place, and the endpoints don't change. `PLACEHOLDER_STEP_SECONDS` sets the wait, and the tests set it to 0.
+- **One swap point:** the endpoint only hands the Run's ID and query to `start_run`. In PR 1, `start_run` runs a placeholder. It waits about 2 seconds, then reports `planning`; about 2 seconds later `running`; and about 2 seconds later the Run is `done`. PR 2 points `research` (in `app/runs.py`) at a real Architecture, and the endpoints don't change. `PLACEHOLDER_STEP_SECONDS` sets the wait, and the tests set it to 0.
 - **Rejected (YAGNI):** a task queue such as Celery or arq with a separate worker process, and resuming Runs after a restart. Both add infrastructure this project doesn't need: one developer, run locally, a handful of Runs. Cancelling Runs was never planned.
 
 ### Tracing: one trace per Run, under its submit request (PR 1)

@@ -16,7 +16,7 @@ The spec assumed Podman is already installed (true on the original Fedora machin
 - [x] Looking up an unknown run ID returns 404.
 - [x] Runs are stored in a `runs` table that one Alembic migration creates, in a locally running PostgreSQL 18.
 - [x] The service refuses to start without `DATABASE_URL`, and `.env.example` lists the variables.
-- [x] Both endpoints work from the `/docs` page.
+- [ ] Both endpoints work from the `/docs` page.
 - [x] The tests go through the HTTP endpoints against a real PostgreSQL test database built from the migration. They are written test-first, and ruff passes.
 - [x] The README covers setup, the environment variables, and running PostgreSQL and the service locally. Its decision log records the API shape of these endpoints (part of open decision #7) and the `runs` table (part of open decision #8).
 - [x] A Postman collection or curl script has both requests.
@@ -25,3 +25,4 @@ The spec assumed Podman is already installed (true on the original Fedora machin
 ## Comments
 
 - 2026-10-22: Built test-first, with 9 tests through the HTTP endpoints. PostgreSQL runs in Docker Desktop, as recorded in the README decision log. The last criterion, the teach-and-quiz, is still open: it happens before PR 1 is merged.
+- 2026-10-22 (code review): the `/docs` criterion is un-ticked. It was checked with curl against the same endpoints, but not in the `/docs` page itself. The developer checks it by eye in `/docs` during the learning check.
