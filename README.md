@@ -2,9 +2,35 @@
 
 A FastAPI service that takes one research question, researches it on the web in the background, and returns a cited report. The full assignment is in [`SPEC.md`](SPEC.md).
 
-**Status:** planning is done and no code exists yet. PR 1, the service skeleton, is next. Its plan and tickets are in [`.scratch/pr-1-service-skeleton/`](.scratch/pr-1-service-skeleton/).
+**Status:** PR 1, the service skeleton, is being built. A caller can submit a query and look up its Run; no research happens yet. The plan and tickets are in [`.scratch/pr-1-service-skeleton/`](.scratch/pr-1-service-skeleton/). Each PR adds to this README; the choices made so far are in the [decision log](#decision-log).
 
-> Setup, environment variables, how to run the service, how to view traces, and the decision log get added to this README as each PR lands.
+## Run it locally
+
+You need [Docker Desktop](https://www.docker.com/products/docker-desktop/) (running) and [uv](https://docs.astral.sh/uv/).
+
+1. **Settings (first time only):** `cp .env.example .env`. The defaults work with the database below.
+2. **Start the database:** `docker compose up -d`. This runs PostgreSQL 18 in a container, and its data lives in the `postgres-data` Docker volume. The first start also creates a second, empty database, `research_test`, for the tests.
+3. **Build or update the tables:** `uv run alembic upgrade head`. This runs every migration the database hasn't had yet.
+4. **Start the service:** `uv run uvicorn app.main:app --reload --port 8001`. `--reload` restarts it when the code changes. Port 8001 is used because, on the developer's Mac, another project's container holds port 8000.
+5. **Try it:** open http://127.0.0.1:8001/docs and use **Try it out** on each endpoint, or run `bash curl-examples.sh` in a second terminal.
+
+To stop: press Ctrl+C for the service, and run `docker compose stop` for the database. `docker compose down -v` also deletes the database's data.
+
+### Environment variables
+
+They are read from the environment or from `.env`, which git ignores. [`.env.example`](.env.example) lists them.
+
+| Variable | Needed | What it is |
+|---|---|---|
+| `DATABASE_URL` | yes | The PostgreSQL connection. The service refuses to start without it. |
+| `LOGFIRE_TOKEN` | no | Lets the service send traces to Logfire. Without it, nothing is sent. |
+
+`OPENROUTER_API_KEY` and `TAVILY_API_KEY` arrive in PR 2.
+
+### Tests and checks
+
+- `uv run pytest`: the tests. The database container must be running. The tests use `research_test`, which they rebuild from the migrations each time.
+- `uv run ruff check` and `uv run ruff format`: the style checks.
 
 ---
 
@@ -104,6 +130,11 @@ claude ──► start the ticket ──► Claude builds + explains ──► "
 
 | Path | What it is |
 |---|---|
+| `app/` | the service: `main.py` (start-up and endpoints), `schemas.py` (API request and response shapes), `tables.py` (database tables), `config.py` (settings) |
+| `migrations/` | Alembic: `versions/` holds one numbered script per change to the tables |
+| `tests/` | the automated tests |
+| `compose.yaml`, `docker/` | how Docker runs PostgreSQL |
+| `curl-examples.sh` | sample requests for every endpoint |
 | `SPEC.md` | the assignment brief and the project's Definition of done |
 | `CLAUDE.md` | how Claude works with you (Claude reads it automatically) |
 | `GLOSSARY.md` | the project's words: Run, Architecture, Plan, … |
@@ -112,3 +143,48 @@ claude ──► start the ticket ──► Claude builds + explains ──► "
 | `.scratch/handoff.md` | notes for continuing on a new machine. Deleted once PR 1 is merged and PR 2 is planned. |
 | `docs/research/` | verified facts about the libraries |
 | `.claude/` | project settings, the push guard hook, and the `/priority` skill |
+
+## Decision log
+
+The choices made so far, newest last, each with its reasoning. The open decisions they settle are listed at the end of [`SPEC.md`](SPEC.md).
+
+### PostgreSQL runs in Docker Desktop (PR 1)
+
+**Decision:** PostgreSQL 18 runs in one Docker container, described in `compose.yaml`.
+
+**Why:**
+- The PR 1 spec planned one Podman container, because the original Fedora laptop had Podman installed. The Mac has Docker Desktop installed instead, and it does the same job, so only the tool changed.
+- A container keeps the database apart from the rest of the computer, and it can be wiped and recreated with one command.
+- Docker Desktop is free for personal and educational use.
+- Rejected: installing Podman, which is extra setup for the same result; and installing PostgreSQL directly on the Mac, which is harder to reset to a clean state.
+
+### API shape of the submit and status endpoints (part of open decision #7, PR 1)
+
+| Request | Success | Errors |
+|---|---|---|
+| `POST /research/query` with `{"query": "..."}` | **202 Accepted** `{"run_id": "<uuid>", "status": "queued"}` | **422** if `query` is missing, blank, or longer than 2000 characters |
+| `GET /research/{run_id}/status` | **200 OK** `{"run_id", "status", "error", "created_at", "updated_at"}` | **404** `{"detail": "Run not found"}`; **422** if `run_id` isn't a UUID |
+
+**Why:**
+- **202, not 200:** the service has accepted the Run but hasn't done the research yet. The research happens in the background, and the caller polls the status endpoint to follow it.
+- **The body is only `query`.** The spec's optional architecture field waits for PR 3, when a second Architecture exists to choose from.
+- **The query is trimmed, then must be 1 to 2000 characters.** That stops empty and oversized queries before they reach any code. Pydantic checks this and FastAPI turns a failure into a 422 that names the field.
+- **Run IDs are random UUIDs (version 4).** Nobody can find another caller's Run by counting.
+- **`error` is `null` unless the Run failed.**
+
+### The `runs` table (part of open decision #8, PR 1)
+
+| Column | Type | Empty allowed? | Holds |
+|---|---|---|---|
+| `id` | UUID | no | the run ID (primary key) |
+| `query` | text | no | the caller's question |
+| `status` | text, limited to `queued`, `planning`, `running`, `done` or `failed` | no | where the Run is in its lifecycle |
+| `error` | text | **yes** | the error message, only when the Run failed |
+| `created_at` | timestamp with time zone | no | set by the database when the row is added |
+| `updated_at` | timestamp with time zone | no | set by the database, and changed on every update |
+
+**Why:**
+- **One table for now.** PR 1 only needs to store the Run itself. The tables for Plans, Steps, Sources and Reports come in PR 2, through a new migration.
+- **`status` is text with a CHECK constraint**, not a PostgreSQL enum type. The database still rejects any other value. But SQLAlchemy 2.1 no longer drops an enum type along with its table, so a migration would need extra steps to undo cleanly.
+- **The table is created only by Alembic migration `0001`.** Any copy of the database reaches the same shape with `alembic upgrade head`, and the tests build their database the same way, so the migration gets tested too.
+- **API models and storage models are separate:** Pydantic (`schemas.py`) and SQLAlchemy (`tables.py`). SQLModel, which merges the two, was rejected because it blurs that line and is still at version 0.0.x.

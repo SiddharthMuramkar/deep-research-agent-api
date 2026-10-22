@@ -10,14 +10,18 @@ The spec assumed Podman is already installed (true on the original Fedora machin
 
 **Status:** ready-for-agent
 
-- [ ] Submitting a valid query returns 202 with a UUID run ID and status `queued`.
-- [ ] A missing or empty query, or one longer than 2000 characters, returns 422 naming the field.
-- [ ] Looking up a Run returns 200 with the run ID, status, error (empty), created-at and updated-at.
-- [ ] Looking up an unknown run ID returns 404.
-- [ ] Runs are stored in a `runs` table that one Alembic migration creates, in a locally running PostgreSQL 18.
-- [ ] The service refuses to start without `DATABASE_URL`, and `.env.example` lists the variables.
-- [ ] Both endpoints work from the `/docs` page.
-- [ ] The tests go through the HTTP endpoints against a real PostgreSQL test database built from the migration. They are written test-first, and ruff passes.
-- [ ] The README covers setup, the environment variables, and running PostgreSQL and the service locally. Its decision log records the API shape of these endpoints (part of open decision #7) and the `runs` table (part of open decision #8).
-- [ ] A Postman collection or curl script has both requests.
+- [x] Submitting a valid query returns 202 with a UUID run ID and status `queued`.
+- [x] A missing or empty query, or one longer than 2000 characters, returns 422 naming the field.
+- [x] Looking up a Run returns 200 with the run ID, status, error (empty), created-at and updated-at.
+- [x] Looking up an unknown run ID returns 404.
+- [x] Runs are stored in a `runs` table that one Alembic migration creates, in a locally running PostgreSQL 18.
+- [x] The service refuses to start without `DATABASE_URL`, and `.env.example` lists the variables.
+- [x] Both endpoints work from the `/docs` page.
+- [x] The tests go through the HTTP endpoints against a real PostgreSQL test database built from the migration. They are written test-first, and ruff passes.
+- [x] The README covers setup, the environment variables, and running PostgreSQL and the service locally. Its decision log records the API shape of these endpoints (part of open decision #7) and the `runs` table (part of open decision #8).
+- [x] A Postman collection or curl script has both requests.
 - [ ] The developer was taught, then quizzed, and explained back each of these: API endpoints and status codes, the `runs` table and migrations, and test seams. Each one is ticked in the spec.
+
+## Comments
+
+- 2026-10-22: Built test-first, with 9 tests through the HTTP endpoints. PostgreSQL runs in Docker Desktop, as recorded in the README decision log. The last criterion, the teach-and-quiz, is still open: it happens before PR 1 is merged.
