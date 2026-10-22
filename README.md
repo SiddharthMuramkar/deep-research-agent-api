@@ -24,8 +24,33 @@ They are read from the environment or from `.env`, which git ignores. [`.env.exa
 |---|---|---|
 | `DATABASE_URL` | yes | The PostgreSQL connection. The service refuses to start without it. |
 | `LOGFIRE_TOKEN` | no | Lets the service send traces to Logfire. Without it, nothing is sent. To get one, run `bash scripts/setup-logfire.sh` in a normal terminal: it walks you through sign-up and saves the token in `.env`. |
+| `PLACEHOLDER_STEP_SECONDS` | no | How long the placeholder waits before each status change. The default is 2, and the tests use 0. |
 
 `OPENROUTER_API_KEY` and `TAVILY_API_KEY` arrive in PR 2.
+
+### View the traces in Logfire
+
+A **trace** is the timeline of one piece of work. Each **span** in it is one timed step, and spans nest inside each other like folders.
+
+1. Get a token once with `bash scripts/setup-logfire.sh`. Then start (or restart) the service, as in step 4 above.
+2. Submit a query, from `/docs` or with `bash curl-examples.sh`.
+3. Open your Logfire region's site (https://logfire-us.pydantic.dev or https://logfire-eu.pydantic.dev), choose the `deep-research-agent-api` project, and open **Live**.
+4. Click the `POST /research/query` row, then expand it. A Run's trace looks like this:
+
+```
+POST /research/query              ~5 ms   ← automatic (FastAPI): ends when the 202 is sent
+├─ INSERT INTO runs …                     ← automatic (asyncpg): every database query
+└─ BackgroundTask start_run       ~6 s    ← automatic (Logfire): the background work
+   └─ research run  run_id=…      ~6 s    ← the one manual span, in app/runs.py
+      ├─ UPDATE runs SET status=…         (planning)
+      ├─ UPDATE runs SET status=…         (running)
+      └─ UPDATE runs SET status=…         (done)
+
+GET /research/{run_id}/status     ~4 ms   ← each poll is its own small trace
+└─ SELECT … FROM runs …
+```
+
+Every `UPDATE` sits between a `BEGIN` and a `COMMIT`: those are the transaction around each change. To find one Run, search for its `run_id`.
 
 ### Tests and checks
 
@@ -202,3 +227,17 @@ The choices made so far, newest last, each with its reasoning. The open decision
 - The cost: the work lives inside the server process, so a restart or crash stops it. The start-up sweep makes that visible instead of leaving Runs stuck forever. A caller who sees "interrupted by restart" can submit the query again.
 - **One swap point:** PR 1 puts a placeholder behind `start_run`. It waits about 2 seconds, then reports `planning`; about 2 seconds later `running`; and about 2 seconds later the Run is `done`. PR 2 swaps in a real Architecture at the same place, and the endpoints don't change. `PLACEHOLDER_STEP_SECONDS` sets the wait, and the tests set it to 0.
 - **Rejected (YAGNI):** a task queue such as Celery or arq with a separate worker process, and resuming Runs after a restart. Both add infrastructure this project doesn't need: one developer, run locally, a handful of Runs. Cancelling Runs was never planned.
+
+### Tracing: one trace per Run, under its submit request (PR 1)
+
+**Decision:**
+- Logfire records every request (FastAPI) and every database query (asyncpg) automatically.
+- One manual span, `research run`, carries the run ID and wraps the background work.
+- Traces are sent only when `LOGFIRE_TOKEN` is set. The tests force it empty, so they never send anything.
+
+**Why:**
+- **One trace per Run:** a Run's background work runs inside its `POST` request's handling, so its spans join that request's trace. The whole story of a Run is then in one place, and each status poll stays out of it as its own small trace.
+- **Database queries are recorded at the asyncpg level.** Logfire's SQLAlchemy hook comes from OpenTelemetry, and its newest version (0.66b1) only supports SQLAlchemy below 2.1, so it would record nothing here. Recording one layer lower, at asyncpg, catches the same queries. This was checked by capturing a Run's spans locally.
+- **Rejected for now:** a separate trace per Run, with its trace ID stored on the Run. That would keep the request's trace and the Run's trace apart, and it would need a new column and manual linking. One trace per Run is simpler and enough for PR 1.
+
+**Checked while building: does the `POST` span last as long as the Run?** No. With Logfire 5.2, the `POST /research/query` span **ends when the 202 response is sent**, after about 5 ms. The background work appears as a child span, `BackgroundTask start_run`, which lasts the whole Run (about 6 seconds). So a child span outlasts its parent. That's allowed: a parent span only says where the work came from, not that it waits for its children. This was measured from a locally captured trace, and it gets confirmed by eye in Logfire as part of ticket 04.

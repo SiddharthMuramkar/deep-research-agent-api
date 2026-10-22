@@ -62,6 +62,7 @@ Every Run is stored in PostgreSQL, and each Run's work appears as one trace in L
   - One manual span, `research run`, wraps the background work and carries the run ID.
   - Because `BackgroundTasks` runs inside the request's handling, a Run's spans nest under its `POST /research/query` trace, and each status poll is its own trace.
   - Confirm while building that the `POST` span lasts as long as the Run. A separate trace per Run was rejected for now.
+  - *Checked while building (2026-10-22):* it does not. The `POST` span ends when the 202 is sent, after about 5 ms. Logfire adds a child span, `BackgroundTask start_run`, which lasts the whole Run. The README decision log records this.
 - **Configuration.** pydantic-settings reads the settings from the environment or `.env`. `DATABASE_URL` is required. `LOGFIRE_TOKEN` is optional; without it, traces aren't sent. The OpenRouter and Tavily keys aren't needed until PR 2. A committed `.env.example` lists the variables.
 - **Toolset.**
   - Python 3.14 (ready-made builds of the database driver and Pydantic were confirmed), managed with uv and its lockfile.
@@ -121,16 +122,17 @@ Tick each item only after the developer has been taught it, quizzed on it, and h
   - why a Run's trace hangs off its `POST /research/query` request (`BackgroundTasks` runs inside that request's handling);
   - what the single manual `research run` span is for;
   - why each status poll is its own small trace;
-  - why the `POST` span appears to last as long as the whole Run, even though the caller got its response instantly;
+  - why the `POST` span ends after a few milliseconds while its child `BackgroundTask start_run` span lasts the whole Run (corrected on 2026-10-22: the spec first expected the `POST` span itself to last as long as the Run);
   - what the rejected alternative, a separate trace per Run with its trace ID stored on the Run, would have changed.
 
   ```
-  POST /research/query                ← automatic (FastAPI)
+  POST /research/query                ← automatic (FastAPI), ends when the 202 is sent
   ├─ INSERT INTO runs                 ← automatic (database)
-  └─ research run  run_id=…           ← the one manual span
-     ├─ UPDATE runs SET status='planning'
-     ├─ (PR 2: agent run → LLM calls → web_search tool calls)
-     └─ UPDATE runs SET status='done'
+  └─ BackgroundTask start_run         ← automatic (Logfire), lasts the whole Run
+     └─ research run  run_id=…        ← the one manual span
+        ├─ UPDATE runs SET status='planning'
+        ├─ (PR 2: agent run → LLM calls → web_search tool calls)
+        └─ UPDATE runs SET status='done'
 
   GET /research/{id}/status           ← each poll is its own tiny trace
   ```

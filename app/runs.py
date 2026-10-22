@@ -5,6 +5,7 @@ import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
 
+import logfire
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -34,14 +35,16 @@ async def start_run(run_id: uuid.UUID, sessions: Sessions, step_seconds: float) 
     async def report(status: RunStatus) -> None:
         await set_status(sessions, run_id, status)
 
-    try:
-        await research(report, step_seconds)
-    except Exception as error:  # noqa: BLE001 (on purpose: any error fails the Run)
-        # Any error ends the Run, with the error recorded on it.
-        message = f"{type(error).__name__}: {error}"
-        await set_status(sessions, run_id, RunStatus.failed, error=message)
-        return
-    await set_status(sessions, run_id, RunStatus.done)
+    # The one manual span: every status update below appears inside it.
+    with logfire.span("research run", run_id=str(run_id)):
+        try:
+            await research(report, step_seconds)
+        except Exception as error:  # noqa: BLE001 (on purpose: any error fails the Run)
+            # Any error ends the Run, with the error recorded on it.
+            message = f"{type(error).__name__}: {error}"
+            await set_status(sessions, run_id, RunStatus.failed, error=message)
+            return
+        await set_status(sessions, run_id, RunStatus.done)
 
 
 async def fail_interrupted_runs(sessions: Sessions) -> None:
@@ -66,7 +69,7 @@ async def set_status(
     error: str | None = None,
 ) -> None:
     async with sessions() as session:
-        run = await session.get_one(Run, run_id)
-        run.status = status
-        run.error = error
+        await session.execute(
+            update(Run).where(Run.id == run_id).values(status=status, error=error)
+        )
         await session.commit()

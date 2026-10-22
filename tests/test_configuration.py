@@ -1,13 +1,34 @@
-import pytest
-from fastapi.testclient import TestClient
-from pydantic import ValidationError
+import os
+import subprocess
+import sys
+from pathlib import Path
 
-from app.main import app
+REPO = Path(__file__).resolve().parent.parent
 
 
-def test_the_service_refuses_to_start_without_a_database_url(monkeypatch, tmp_path):
-    monkeypatch.delenv("DATABASE_URL")
-    monkeypatch.chdir(tmp_path)  # an empty folder, so there is no .env file either
+def test_the_service_refuses_to_start_without_a_database_url(tmp_path):
+    environment = {k: v for k, v in os.environ.items() if k != "DATABASE_URL"}
 
-    with pytest.raises(ValidationError, match="database_url"), TestClient(app):
-        pass
+    # Start the real server from an empty folder, so there is no .env file either.
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "app.main:app",
+            "--app-dir",
+            str(REPO),
+            "--port",
+            "0",
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,  # a failing exit is what this test expects
+    )
+
+    assert result.returncode != 0
+    assert "database_url" in result.stderr
+    assert "Field required" in result.stderr

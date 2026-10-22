@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
+import logfire
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -13,14 +14,26 @@ from app.runs import fail_interrupted_runs, start_run
 from app.schemas import QueryAccepted, QueryRequest, RunStatusResponse
 from app.tables import Run, RunStatus
 
+# Read once, when the app is loaded. Raises, so the service refuses to start,
+# if DATABASE_URL is missing.
+settings = Settings()
+
+# Send traces to Logfire only when a token is configured, so tests send nothing.
+logfire.configure(
+    service_name="deep-research-agent-api",
+    token=settings.logfire_token,
+    send_to_logfire=bool(settings.logfire_token),
+    console=False,
+)
+# Every database query becomes a span, automatically. This hooks asyncpg, the
+# driver under SQLAlchemy, because the SQLAlchemy hook doesn't support 2.1 yet.
+logfire.instrument_asyncpg()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Runs once at start-up (before `yield`) and once at shut-down (after)."""
-    # Raises, so the service refuses to start, if DATABASE_URL is missing.
-    settings = Settings()
     engine = create_async_engine(settings.database_url)
-    app.state.settings = settings
     app.state.sessions = async_sessionmaker(engine, expire_on_commit=False)
     await fail_interrupted_runs(app.state.sessions)
     yield
@@ -28,6 +41,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Deep Research Agent API", lifespan=lifespan)
+# Every request becomes a span (the start of a trace), automatically.
+logfire.instrument_fastapi(app)
 
 
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
@@ -55,7 +70,7 @@ async def submit_query(
         start_run,
         run.id,
         request.app.state.sessions,
-        request.app.state.settings.placeholder_step_seconds,
+        settings.placeholder_step_seconds,
     )
     return QueryAccepted(run_id=run.id, status=run.status)
 

@@ -4,7 +4,7 @@ These facts were checked on 2026-10-22 against Context7 and the installed versio
 
 ## Versions in `uv.lock`
 
-FastAPI 0.159, Starlette 1.9, Pydantic 2.14, pydantic-settings 2.16, SQLAlchemy **2.1**, Alembic 1.20, asyncpg 0.32, uvicorn 0.54, Python 3.14. The database is PostgreSQL 18.6, from the `postgres:18` Docker image.
+FastAPI 0.159, Starlette 1.9, Pydantic 2.14, pydantic-settings 2.16, SQLAlchemy **2.1**, Alembic 1.20, asyncpg 0.32, uvicorn 0.54, Logfire 5.2, Python 3.14. The database is PostgreSQL 18.6, from the `postgres:18` Docker image.
 
 ## PostgreSQL 18 Docker image
 
@@ -36,3 +36,11 @@ Scripts in `/docker-entrypoint-initdb.d/` run only when the data volume is first
 - Environment variables win over `.env`.
 - By default `extra='forbid'` rejects unknown keys in `.env`. We use `extra='ignore'`, because `.env` holds keys for later PRs.
 - `StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)` trims the string first, then checks its length.
+
+## Logfire 5.2
+
+- Call `logfire.configure()` **before** `logfire.instrument_fastapi(app)`, and instrument the app exactly once. That is why `app/main.py` reads `Settings()` when it is imported, not in `lifespan`. *(logfire docs, FastAPI troubleshooting)*
+- Without a token, the code that sends data to Logfire is never created, so nothing leaves the machine. The console printer is separate and is on by default; we turn it off with `console=False`. *(logfire `_internal/config.py`)*
+- The write token records its region (US or EU), so no base URL is needed. *(logfire docs, data regions)*
+- **OpenTelemetry's SQLAlchemy instrumentation (0.66b1, the newest) only supports `sqlalchemy >= 1.0.0, < 2.1.0`.** With SQLAlchemy 2.1, `logfire.instrument_sqlalchemy()` prints a warning and records nothing. `logfire.instrument_asyncpg()` (the `logfire[asyncpg]` extra) records the same queries at the driver level, including the prepared statements SQLAlchemy uses. *(PyPI metadata; checked by capturing spans locally on 2026-10-22)*
+- `instrument_fastapi` ends the request span when the response is sent. Background tasks appear as a child span named `BackgroundTask <function>` that outlasts its parent, in the same trace. *(captured locally)*
