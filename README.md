@@ -72,7 +72,7 @@ You need Claude Code installed (claude.com/claude-code). If macOS asks to instal
 In a **normal terminal**:
 
 ```
-git clone https://github.com/siddharth-0044/deep-research-agent-api.git
+git clone https://github.com/SiddharthMuramkar/deep-research-agent-api.git
 cd deep-research-agent-api
 claude
 ```
