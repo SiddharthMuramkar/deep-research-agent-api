@@ -23,7 +23,7 @@ They are read from the environment or from `.env`, which git ignores. [`.env.exa
 | Variable | Needed | What it is |
 |---|---|---|
 | `DATABASE_URL` | yes | The PostgreSQL connection. The service refuses to start without it. |
-| `LOGFIRE_TOKEN` | no | Lets the service send traces to Logfire. Without it, nothing is sent. |
+| `LOGFIRE_TOKEN` | no | Lets the service send traces to Logfire. Without it, nothing is sent. To get one, run `bash scripts/setup-logfire.sh` in a normal terminal: it walks you through sign-up and saves the token in `.env`. |
 
 `OPENROUTER_API_KEY` and `TAVILY_API_KEY` arrive in PR 2.
 
@@ -135,6 +135,7 @@ claude ──► start the ticket ──► Claude builds + explains ──► "
 | `tests/` | the automated tests |
 | `compose.yaml`, `docker/` | how Docker runs PostgreSQL |
 | `curl-examples.sh` | sample requests for every endpoint |
+| `scripts/setup-logfire.sh` | the wizard that creates your Logfire account, project and write token |
 | `SPEC.md` | the assignment brief and the project's Definition of done |
 | `CLAUDE.md` | how Claude works with you (Claude reads it automatically) |
 | `GLOSSARY.md` | the project's words: Run, Architecture, Plan, … |
