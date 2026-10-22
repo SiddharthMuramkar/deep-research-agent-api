@@ -5,10 +5,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import Settings
+from app.runs import fail_interrupted_runs, start_run
 from app.schemas import QueryAccepted, QueryRequest, RunStatusResponse
 from app.tables import Run, RunStatus
 
@@ -19,7 +20,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Raises, so the service refuses to start, if DATABASE_URL is missing.
     settings = Settings()
     engine = create_async_engine(settings.database_url)
+    app.state.settings = settings
     app.state.sessions = async_sessionmaker(engine, expire_on_commit=False)
+    await fail_interrupted_runs(app.state.sessions)
     yield
     await engine.dispose()
 
@@ -37,11 +40,23 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 
 @app.post("/research/query", status_code=202)
-async def submit_query(body: QueryRequest, session: Session) -> QueryAccepted:
+async def submit_query(
+    body: QueryRequest,
+    session: Session,
+    background_tasks: BackgroundTasks,
+    request: Request,
+) -> QueryAccepted:
     """Start a Run. Answers at once; the research happens later."""
     run = Run(id=uuid.uuid4(), query=body.query, status=RunStatus.queued)
     session.add(run)
     await session.commit()
+    # Runs after the response has been sent, in this same server process.
+    background_tasks.add_task(
+        start_run,
+        run.id,
+        request.app.state.sessions,
+        request.app.state.settings.placeholder_step_seconds,
+    )
     return QueryAccepted(run_id=run.id, status=run.status)
 
 

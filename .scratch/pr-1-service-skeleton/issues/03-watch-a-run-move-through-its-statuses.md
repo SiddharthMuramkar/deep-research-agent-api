@@ -9,11 +9,15 @@
 
 **Status:** ready-for-agent
 
-- [ ] A submitted Run reaches `done` through `planning` and `running`, with no further requests. The wait is configurable, and it is zero in the tests.
-- [ ] The background work starts through `start_run(run_id)` with FastAPI `BackgroundTasks`.
-- [ ] If the work raises an error, the Run ends `failed` with the error message. A test swaps in work that raises, to check this.
-- [ ] On startup, Runs left `queued`, `planning` or `running` become `failed` with "interrupted by restart". A test seeds an unfinished Run, to check this.
-- [ ] Polling in `/docs` shows the status change in real time.
-- [ ] The README decision log records open decision #2 (background execution and restart behaviour).
-- [ ] The Postman collection or curl script has a sample end-to-end Run: submit, then poll until `done`.
+- [x] A submitted Run reaches `done` through `planning` and `running`, with no further requests. The wait is configurable, and it is zero in the tests.
+- [x] The background work starts through `start_run(run_id)` with FastAPI `BackgroundTasks`.
+- [x] If the work raises an error, the Run ends `failed` with the error message. A test swaps in work that raises, to check this.
+- [x] On startup, Runs left `queued`, `planning` or `running` become `failed` with "interrupted by restart". A test seeds an unfinished Run, to check this.
+- [x] Polling in `/docs` shows the status change in real time.
+- [x] The README decision log records open decision #2 (background execution and restart behaviour).
+- [x] The Postman collection or curl script has a sample end-to-end Run: submit, then poll until `done`.
 - [ ] The developer was taught, then quizzed, and explained back the Run lifecycle, end to end. It is ticked in the spec.
+
+## Comments
+
+- 2026-10-22: Built test-first, with 5 new tests: one through the second seam (work that raises) and four for the start-up sweep. On the real server, a Run went queued, planning, running, done in about 6 seconds. A Run killed mid-way showed "interrupted by restart" after the restart. The status polling was checked with `curl-examples.sh`, which calls the same endpoint as `/docs`; the developer can watch it in `/docs` during the learning check. The teach-and-quiz is still open.

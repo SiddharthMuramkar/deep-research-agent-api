@@ -2,7 +2,7 @@
 
 A FastAPI service that takes one research question, researches it on the web in the background, and returns a cited report. The full assignment is in [`SPEC.md`](SPEC.md).
 
-**Status:** PR 1, the service skeleton, is being built. A caller can submit a query and look up its Run; no research happens yet. The plan and tickets are in [`.scratch/pr-1-service-skeleton/`](.scratch/pr-1-service-skeleton/). Each PR adds to this README; the choices made so far are in the [decision log](#decision-log).
+**Status:** PR 1, the service skeleton, is being built. A caller can submit a query and watch its Run move through its statuses; a placeholder stands in for the research until PR 2. The plan and tickets are in [`.scratch/pr-1-service-skeleton/`](.scratch/pr-1-service-skeleton/). Each PR adds to this README; the choices made so far are in the [decision log](#decision-log).
 
 ## Run it locally
 
@@ -130,7 +130,7 @@ claude ──► start the ticket ──► Claude builds + explains ──► "
 
 | Path | What it is |
 |---|---|
-| `app/` | the service: `main.py` (start-up and endpoints), `schemas.py` (API request and response shapes), `tables.py` (database tables), `config.py` (settings) |
+| `app/` | the service: `main.py` (start-up and endpoints), `runs.py` (a Run's background work), `schemas.py` (API request and response shapes), `tables.py` (database tables), `config.py` (settings) |
 | `migrations/` | Alembic: `versions/` holds one numbered script per change to the tables |
 | `tests/` | the automated tests |
 | `compose.yaml`, `docker/` | how Docker runs PostgreSQL |
@@ -189,3 +189,16 @@ The choices made so far, newest last, each with its reasoning. The open decision
 - **`status` is text with a CHECK constraint**, not a PostgreSQL enum type. The database still rejects any other value. But SQLAlchemy 2.1 no longer drops an enum type along with its table, so a migration would need extra steps to undo cleanly.
 - **The table is created only by Alembic migration `0001`.** Any copy of the database reaches the same shape with `alembic upgrade head`, and the tests build their database the same way, so the migration gets tested too.
 - **API models and storage models are separate:** Pydantic (`schemas.py`) and SQLAlchemy (`tables.py`). SQLModel, which merges the two, was rejected because it blurs that line and is still at version 0.0.x.
+
+### Background execution and restarts (open decision #2, PR 1)
+
+**Decision:**
+- A Run's work runs with FastAPI `BackgroundTasks`, inside the same server process, after the 202 response has gone out.
+- It starts through one swap point, `start_run(run_id)` in `app/runs.py`, and finishes `done` or `failed`. Any error is caught and stored on the Run as `"<ErrorType>: <message>"`.
+- On start-up, the service marks every Run still `queued`, `planning` or `running` as `failed`, with the error "interrupted by restart".
+
+**Why:**
+- `BackgroundTasks` is built into FastAPI. It needs no extra program, queue or database, so there are fewer moving parts to run and explain.
+- The cost: the work lives inside the server process, so a restart or crash stops it. The start-up sweep makes that visible instead of leaving Runs stuck forever. A caller who sees "interrupted by restart" can submit the query again.
+- **One swap point:** PR 1 puts a placeholder behind `start_run`. It waits about 2 seconds, then reports `planning`; about 2 seconds later `running`; and about 2 seconds later the Run is `done`. PR 2 swaps in a real Architecture at the same place, and the endpoints don't change. `PLACEHOLDER_STEP_SECONDS` sets the wait, and the tests set it to 0.
+- **Rejected (YAGNI):** a task queue such as Celery or arq with a separate worker process, and resuming Runs after a restart. Both add infrastructure this project doesn't need: one developer, run locally, a handful of Runs. Cancelling Runs was never planned.

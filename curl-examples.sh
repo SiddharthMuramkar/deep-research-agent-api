@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Sample requests for every endpoint. Start the service first (see README), then:
+# Sample requests for every endpoint, including one Run from start to end.
+# Start the service first (see README), then:
 #   bash curl-examples.sh
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:8001}"
 
-echo "1. Submit a query (expect 202 and a run ID):"
+echo "1. Submit a query (expect 202, a run ID and status queued):"
 response=$(curl -s -X POST "$BASE_URL/research/query" \
   -H "Content-Type: application/json" \
   -d '{"query": "What is a tracer bullet in software development?"}')
@@ -13,9 +14,21 @@ echo "$response"
 run_id=$(echo "$response" | sed -E 's/.*"run_id":"([^"]+)".*/\1/')
 
 echo
-echo "2. Look up its status (expect 200):"
-curl -s "$BASE_URL/research/$run_id/status"
-echo
+echo "2. Poll its status until the Run finishes (about 6 seconds):"
+previous=""
+while true; do
+  status_body=$(curl -s "$BASE_URL/research/$run_id/status")
+  status=$(echo "$status_body" | sed -E 's/.*"status":"([^"]+)".*/\1/')
+  if [[ "$status" != "$previous" ]]; then
+    echo "   $(date +%T)  $status"
+    previous="$status"
+  fi
+  if [[ "$status" == "done" || "$status" == "failed" ]]; then
+    break
+  fi
+  sleep 0.5
+done
+echo "   Final: $status_body"
 
 echo
 echo "3. Look up a run ID that doesn't exist (expect 404):"

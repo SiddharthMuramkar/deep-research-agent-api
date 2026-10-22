@@ -19,7 +19,9 @@ def test_submitting_a_query_returns_202_with_a_queued_run(client):
     assert body["status"] == "queued"
 
 
-def test_looking_up_a_run_shows_its_status_and_timestamps(client):
+def test_a_submitted_run_reaches_done_on_its_own(client):
+    # The test client waits for the background work, and the tests set the
+    # placeholder's waits to zero, so the Run is finished by the time we look.
     run_id = submit(client).json()["run_id"]
 
     response = client.get(f"/research/{run_id}/status")
@@ -27,7 +29,7 @@ def test_looking_up_a_run_shows_its_status_and_timestamps(client):
     assert response.status_code == 200
     body = response.json()
     assert body["run_id"] == run_id
-    assert body["status"] == "queued"
+    assert body["status"] == "done"
     assert body["error"] is None
     assert body["created_at"]
     assert body["updated_at"]

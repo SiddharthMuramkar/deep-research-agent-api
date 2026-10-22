@@ -4,36 +4,20 @@ Every test talks to the app over HTTP. Behind the app is a real PostgreSQL
 test database whose tables come from the Alembic migrations.
 """
 
-import asyncio
 import os
 
 import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.main import app
-
-TEST_DATABASE_URL = (
-    "postgresql+asyncpg://research:research@localhost:5432/research_test"
-)
+from tests.database import TEST_DATABASE_URL, run_sql
 
 # Point the app and Alembic at the test database, never the development one.
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
-
-
-def run_sql(sql: str, **params: object) -> None:
-    """Run one SQL statement against the test database, for test setup only."""
-
-    async def run() -> None:
-        engine = create_async_engine(TEST_DATABASE_URL)
-        async with engine.begin() as connection:
-            await connection.execute(text(sql), params)
-        await engine.dispose()
-
-    asyncio.run(run())
+# Skip the placeholder's pretend waiting, so the tests run in seconds.
+os.environ["PLACEHOLDER_STEP_SECONDS"] = "0"
 
 
 @pytest.fixture(scope="session", autouse=True)
